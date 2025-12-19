@@ -60,7 +60,7 @@ cd market_prophet
 # Or download and extract the ZIP file
 ```
 
-### Step 2: Create Virtual Environment (Recommended)
+### Step 2: Create Virtual Environment 
 ```bash
 # Windows
 python -m venv venv
