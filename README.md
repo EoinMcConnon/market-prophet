@@ -54,7 +54,13 @@ A comprehensive application implementing OLS, ARIMA, and GARCH models for foreca
 ### Step 1: Clone or Download
 ```bash
 # If using Git
-git clone <repository-url>
+git clone <https://market-prophet-rvb2wk6x2jqr7vj5gemw2g.streamlit.app/>
+cd market_prophet
+
+# Or download and extract the ZIP file>
+cd market_prophet
+
+# Or download and extract the ZIP file>
 cd market_prophet
 
 # Or download and extract the ZIP file
