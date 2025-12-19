@@ -256,18 +256,7 @@ See `requirements.txt` for complete list.
 
 ---
 
-## 🎯 Key Features for Academic Requirements
 
-✅ **OLS, ARIMA, and GARCH** implemented  
-✅ **Real financial data** from Yahoo Finance  
-✅ **Forecast accuracy tests** (multiple metrics)  
-✅ **Model comparison** with statistical tests  
-✅ **Interactive dashboard** with Streamlit  
-✅ **Standalone .py script** that matches app results  
-✅ **Professional documentation**  
-✅ **Educational component** (quiz mode)  
-
----
 
 ## 🎓 Educational Value
 
