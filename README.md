@@ -299,11 +299,11 @@ This platform is designed to help students:
 
 ## 🤝 Contributors
 
-[Your Group Members' Names Here]
+[Eoin McConnon, Rian O'Gorman, Luke Monahan]
 
 **Course**: FIN41660 Financial Econometrics  
 **Institution**: University College Dublin  
-**Instructor**: Associate Professor Alessia Paccagnini  
+**Instructor**:  Professor Alessia Paccagnini  
 **Academic Year**: 2025/2026
 
 ---
@@ -319,7 +319,7 @@ This project is created for educational purposes as part of the FIN41660 course.
 - **Yahoo Finance** for providing free financial data API
 - **Statsmodels** and **Arch** libraries for econometric implementations
 - **Streamlit** for the interactive dashboard framework
-- **Professor Alessia Paccagnini** for course guidance
+
 
 ---
 
