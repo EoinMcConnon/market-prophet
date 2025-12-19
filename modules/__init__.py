@@ -1,5 +1,5 @@
 """
-Market Prophet - Core Modules
+Market Prophet 
 
 Time series forecasting models and utilities
 """
