@@ -1,5 +1,5 @@
 """
-MARKET PROPHET - Complete Working Version
+MARKET PROPHET 
 Financial Econometrics Time Series Forecasting Platform
 """
 
@@ -27,6 +27,18 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Helper function for R² interpretation
+def format_r_squared(r2_value):
+    """Format R² value with interpretation"""
+    if r2_value < 0:
+        return f"{r2_value:.4f} ⚠️"
+    elif r2_value < 0.3:
+        return f"{r2_value:.4f}"
+    elif r2_value < 0.7:
+        return f"{r2_value:.4f}"
+    else:
+        return f"{r2_value:.4f} ✓"
 
 # Title
 st.markdown("# 🔮 MARKET PROPHET")
@@ -172,7 +184,7 @@ if st.session_state.data_loaded:
                 if stationarity['Is Stationary']:
                     st.success("✅ Series is stationary")
                 else:
-                    st.warning("⚠️ Series is non-stationary")
+                    st.warning("⚠️ Series is non-stationary (ARIMA will difference)")
             except Exception as e:
                 st.error(f"Could not perform test: {str(e)}")
     
@@ -198,7 +210,12 @@ if st.session_state.data_loaded:
             st.subheader("🔵 OLS Model")
             ols_enabled = st.checkbox("Enable OLS", value=True)
             if ols_enabled:
-                ols_trend = st.selectbox("Trend Type", ["linear", "quadratic"], key="ols_trend")
+                # Only offer quadratic if enough data
+                if len(train_data) > 50:
+                    ols_trend = st.selectbox("Trend Type", ["linear", "quadratic"], key="ols_trend")
+                else:
+                    ols_trend = "linear"
+                    st.info("ℹ️ Using linear trend (more data needed for quadratic)")
         
         with col2:
             st.subheader("🟢 ARIMA Model")
@@ -218,7 +235,10 @@ if st.session_state.data_loaded:
                 garch_q = st.number_input("q (ARCH)", 1, 3, 1, key="gq")
         
         st.markdown("---")
-        forecast_horizon = st.slider("Forecast Horizon", 1, 30, 10)
+        
+        # Adjusted default forecast horizon
+        forecast_horizon = st.slider("Forecast Horizon (steps ahead)", 1, 30, 5)
+        st.caption("💡 Tip: Shorter horizons typically produce more accurate forecasts")
         
         if st.button("🚀 Train All Models", type="primary", use_container_width=True):
             with st.spinner("Training models..."):
@@ -347,6 +367,22 @@ if st.session_state.data_loaded:
                         # Show metrics for test period only
                         metrics = ModelComparison.calculate_metrics(test_data, forecast_test)
                         st.write("**Accuracy Metrics (Test Period)**")
+                        
+                        # Check for negative R² and warn
+                        if metrics['R²'] < 0:
+                            st.warning(
+                                f"⚠️ **Negative R² ({metrics['R²']:.4f})**: "
+                                f"This indicates the {model_name} model performs worse than simply "
+                                f"predicting the mean. Consider using ARIMA or GARCH for this data. "
+                                f"This is common for mean-reverting or highly volatile series."
+                            )
+                        elif metrics['R²'] < 0.3:
+                            st.info(
+                                f"ℹ️ **Low R² ({metrics['R²']:.4f})**: "
+                                f"The {model_name} model explains less than 30% of variance. "
+                                f"ARIMA may provide better forecasts for this series."
+                            )
+                        
                         metrics_df = pd.DataFrame([metrics])
                         st.dataframe(metrics_df.style.format("{:.4f}"))
                         
@@ -366,6 +402,7 @@ if st.session_state.data_loaded:
                         fig, ax = plt.subplots(figsize=(12, 4))
                         ax.plot(cond_vol.index, cond_vol.values, linewidth=2)
                         ax.set_title("Conditional Volatility (GARCH)")
+                        ax.set_ylabel("Volatility (%)")
                         ax.grid(True, alpha=0.3)
                         st.pyplot(fig)
                         plt.close()
@@ -374,7 +411,27 @@ if st.session_state.data_loaded:
                         total_vol_forecast = st.session_state.forecast_horizon + forecast_extension
                         vol_forecast = model.predict_volatility(horizon=total_vol_forecast)
                         st.write(f"**Volatility Forecast (Next {total_vol_forecast} Periods)**")
-                        st.write(vol_forecast)
+                        
+                        # Display as dataframe
+                        vol_df = pd.DataFrame({
+                            'Period': range(1, len(vol_forecast) + 1),
+                            'Volatility (%)': vol_forecast.values
+                        })
+                        st.dataframe(vol_df)
+                        
+                        # Calculate risk metrics
+                        try:
+                            annual_vol = model.annualized_volatility(periods_per_year=252)
+                            var_95 = model.value_at_risk(confidence=0.05, horizon=1)
+                            
+                            st.write("**Risk Metrics**")
+                            risk_col1, risk_col2 = st.columns(2)
+                            with risk_col1:
+                                st.metric("Annualized Volatility", f"{annual_vol:.2f}%")
+                            with risk_col2:
+                                st.metric("1-Day VaR (95%)", f"{var_95:.2f}%")
+                        except:
+                            pass
                     
                     st.markdown("---")
                 
@@ -403,14 +460,40 @@ if st.session_state.data_loaded:
             if len(forecasts) > 0:
                 st.subheader("Accuracy Comparison Table")
                 comparison = ModelComparison.create_comparison_table(test_data, forecasts)
-                st.dataframe(comparison[['MAE', 'RMSE', 'MAPE', 'R²']].style.format("{:.4f}"))
+                
+                # Highlight best model
+                st.dataframe(
+                    comparison[['MAE', 'RMSE', 'MAPE', 'R²', 'Average Rank']]
+                    .style.format("{:.4f}")
+                    .highlight_min(subset=['MAE', 'RMSE', 'MAPE', 'Average Rank'], color='lightgreen')
+                    .highlight_max(subset=['R²'], color='lightgreen')
+                )
                 
                 best_model = comparison.index[0]
-                st.success(f"🏆 **Best Model:** {best_model}")
+                st.success(f"🏆 **Best Model:** {best_model} (Lowest Average Rank)")
+                
+                # Interpretation guide
+                with st.expander("ℹ️ How to Interpret These Metrics"):
+                    st.markdown("""
+                    **MAE (Mean Absolute Error)**: Average magnitude of forecast errors. Lower is better.
+                    
+                    **RMSE (Root Mean Squared Error)**: Penalizes large errors more. Lower is better.
+                    
+                    **MAPE (Mean Absolute Percentage Error)**: Scale-independent error measure. Lower is better.
+                    
+                    **R² (Coefficient of Determination)**: 
+                    - 1.0 = Perfect predictions
+                    - 0.7-0.9 = Strong model
+                    - 0.3-0.7 = Moderate model
+                    - < 0.3 = Weak model
+                    - **Negative = Model worse than predicting the mean** (use a different model!)
+                    
+                    **Average Rank**: Lower is better (1 = best overall performer)
+                    """)
                 
                 st.subheader("Visual Comparison")
                 fig, ax = plt.subplots(figsize=(12, 6))
-                ax.plot(test_data.index, test_data.values, 'k-', label='Actual', linewidth=2)
+                ax.plot(test_data.index, test_data.values, 'k-', label='Actual', linewidth=2.5)
                 
                 colors = {'OLS': 'blue', 'ARIMA': 'green'}
                 for name, forecast in forecasts.items():
@@ -420,11 +503,15 @@ if st.session_state.data_loaded:
                 ax.legend()
                 ax.grid(True, alpha=0.3)
                 ax.set_title("Model Comparison: Forecasts vs Actual")
+                ax.set_xlabel("Date")
+                ax.set_ylabel("Price")
                 st.pyplot(fig)
                 plt.close()
                 
                 if len(forecasts) >= 2:
                     st.subheader("Diebold-Mariano Test")
+                    st.caption("Statistical test comparing forecast accuracy between models")
+                    
                     model_names = list(forecasts.keys())
                     try:
                         dm_test = ModelComparison.diebold_mariano_test(
@@ -433,7 +520,12 @@ if st.session_state.data_loaded:
                         st.write(f"**Comparing:** {model_names[0]} vs {model_names[1]}")
                         st.write(f"**DM Statistic:** {dm_test['DM Statistic']:.4f}")
                         st.write(f"**p-value:** {dm_test['p-value']:.4f}")
-                        st.write(f"**Result:** {dm_test['Conclusion']}")
+                        st.write(f"**Conclusion:** {dm_test['Conclusion']}")
+                        
+                        if dm_test['p-value'] < 0.05:
+                            st.success(f"✅ {dm_test['Better Model']} is statistically significantly better (p < 0.05)")
+                        else:
+                            st.info("ℹ️ No statistically significant difference between models")
                     except Exception as e:
                         st.error(f"DM test failed: {str(e)}")
             else:
@@ -453,38 +545,53 @@ if st.session_state.data_loaded:
         
         **1. OLS (Ordinary Least Squares) 📏**
         - Captures linear and quadratic trends
-        - Best for: Trending markets
-        - Output: Price forecasts
+        - Best for: Trending markets, long-term analysis
+        - Output: Price forecasts, trend identification
+        - **Note**: May show negative R² on mean-reverting or volatile series (this indicates ARIMA is better!)
         
         **2. ARIMA (AutoRegressive Integrated Moving Average) 🔄**
         - Models autocorrelation in time series
-        - Best for: Pattern-based forecasting
+        - Best for: Pattern-based forecasting, stationary series
         - Output: Price forecasts with confidence intervals
+        - **Strength**: Handles both trending and mean-reverting data
         
         **3. GARCH (Generalized AutoRegressive Conditional Heteroskedasticity) 📊**
         - Models volatility clustering
-        - Best for: Risk management, VaR calculations
-        - Output: Volatility forecasts
+        - Best for: Risk management, VaR calculations, high-volatility assets
+        - Output: Volatility forecasts, Value-at-Risk
+        - **Unique**: Only model that forecasts volatility instead of prices
         
         ### 📚 How to Use
         
-        1. **Load Data:** Choose Yahoo Finance or preloaded datasets
-        2. **Configure Models:** Select which models to train
-        3. **Train:** Click "Train All Models"
-        4. **View Results:** See forecasts in tabs 3 & 4
-        5. **Compare:** See which model performs best
+        1. **Load Data:** Choose Yahoo Finance (any ticker) or preloaded datasets
+        2. **Configure Models:** Select which models to train, adjust parameters
+        3. **Train:** Click "Train All Models" and wait 10-30 seconds
+        4. **View Results:** See individual forecasts in Tab 3
+        5. **Compare:** Tab 4 shows which model performs best with statistical tests
+        
+        ### 🎓 Understanding Negative R²
+        
+        You may occasionally see negative R² values for OLS. **This is not an error!**
+        
+        Negative R² means:
+        - The model performs worse than simply predicting the historical mean
+        - The data is not suited for trend-based forecasting
+        - You should use ARIMA or GARCH instead for this asset/period
+        
+        Our platform correctly identifies this through the comparison table, 
+        automatically recommending the best model for your data.
         
         ### 🎓 Educational Value
         
         This platform demonstrates:
         - Real-world application of econometric models
-        - Model comparison and evaluation
-        - Forecast accuracy testing
-        - Professional software development practices
+        - Model selection and comparison techniques
+        - Forecast accuracy testing with statistical rigor
+        - When different models are appropriate
         
         ### 👥 Created By
         
-        [Eoin McConnon, Rian O Gorman, Luke Monahan]
+        Eoin McConnon, Rian O Gorman, Luke Monahan
         
         **Course:** FIN41660 Financial Econometrics  
         **Institution:** University College Dublin  
@@ -492,9 +599,9 @@ if st.session_state.data_loaded:
         
         ---
         
-        **💡 Tip:** Use the standalone script for detailed analysis:
-        ```
-        python standalone_analysis.py --ticker AAPL
+        **💡 Tip:** Use the standalone script for batch analysis:
+        ```bash
+        python standalone_analysis.py --ticker AAPL --start 2023-01-01 --end 2023-12-31
         ```
         """)
 
@@ -519,8 +626,18 @@ else:
     - `^GSPC` - S&P 500
     
     **Preloaded Datasets:**
-    - 2008 Financial Crisis
+    - 2008 Financial Crisis (S&P 500)
     - COVID-19 Market Crash
-    - Bitcoin Bull Run
-    - And more!
+    - Bitcoin Bull Run (2020-2021)
+    - Tech Bubble Burst (2000-2002)
+    - Oil Price Collapse (2014-2016)
+    
+    ### What Makes a Good Forecast?
+    
+    Different models excel in different scenarios:
+    - **OLS**: Works best on clearly trending assets (tech stocks in bull markets)
+    - **ARIMA**: Best for mean-reverting or cyclical assets (commodities, FX)
+    - **GARCH**: Essential for volatility analysis (options pricing, risk management)
+    
+    Try multiple assets to see which model performs best in each case!
     """)
