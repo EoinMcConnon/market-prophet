@@ -31,7 +31,7 @@ The platform provides both an interactive web dashboard and a standalone command
 
 ## 🚀 QUICK START
 
-### **Option 1: Use the Live Demo (Easiest!)**
+### **Option 1: Use the Live Demo**
 
 Simply visit: **https://market-prophet-rvb2wk6x2jqr7vj5gemw2g.streamlit.app/**
 
